@@ -1,99 +1,75 @@
-# NP HW3 – Game Store System
+# Multiplayer Game Distribution Platform
 
-## 環境需求
+A Python game distribution platform developed as an individual Network Programming project. Separate developer and player clients support game publishing, downloads, multiplayer rooms, and plugins.
 
-- Python 3.10+
-- Tkinter, SQLite3 (Python 標準函式庫)
+## Features
 
-## 部署檔案架構(可以直接從codebase資料夾下載)
+- Developer registration, game creation, version uploads, and publishing.
+- Player registration, store browsing, and game downloads.
+- Multiplayer room creation, joining, and game launching.
+- CLI and GUI game templates, plus plugin registration, installation, and dynamic loading.
 
-### Server 端
-```
-server/
-  db_server.py
-  developer_server.py
-  lobby_server.py
-  storage/          (自動建立)
-  runtime/          (自動建立)
-common/
-  lp.py
-store.sqlite3       (自動建立)
-```
+## Architecture
 
-### Developer Client 端
-```
-developer_client/
-  gui.py
-common/
-  lp.py
-game_templates/     (上傳用的遊戲範例)
-  connect4_cli/
-  tetris_gui/
-  rps_gui/
-```
+| Component | Responsibility | Default port |
+|---|---|---|
+| Developer Server | Developer operations and publishing | 23001 |
+| Lobby Server | Player operations and multiplayer rooms | 23002 |
+| DB Server | Shared SQLite-backed data access | 23000 |
 
-### Player Client 端
-```
-player_client/
-  gui.py
-  downloads/        (自動建立，存放下載的遊戲)
-  plugins/          (自動建立)
-common/
-  lp.py
-```
+Developer Client → Developer Server → DB Server  
+Player Client → Lobby Server → DB Server
 
-## 操作流程
+Socket connections use a shared length-prefixed JSON protocol with multithreaded connection handling.
 
-### 1. 啟動伺服器
+## Requirements
 
-若三個伺服器在同一台機器：
+Python 3.10+, including Tkinter and SQLite support. Run the commands below from the directory containing `server/`, `common/`, `developer_client/`, and `player_client/` (the repository's `codebase` directory).
+
+## Run Locally
+
+Start each server in a separate terminal:
+
 ```bash
 python -m server.db_server --port 23000
 python -m server.developer_server --port 23001
 python -m server.lobby_server --port 23002
 ```
 
-若部署在不同server (假設 DB Server 在 140.113.17.13)：
+Start the developer interface:
+
 ```bash
-# DB Server (140.113.17.13)
-python -m server.db_server --host 0.0.0.0 --port 23000
-
-# Developer Server (指定 DB Server 位置)
-python -m server.developer_server --host 0.0.0.0 --port 23001 --db-host 140.113.17.13 --db-port 23000
-
-# Lobby Server (指定 DB Server 位置，以及對外公開的 IP)
-python -m server.lobby_server --host 0.0.0.0 --port 23002 --db-host 140.113.17.13 --db-port 23000 --public-host 140.113.17.11
-```
-
-### 2. Devloper
-```powershell
 python -m developer_client.gui
 ```
-1. 輸入lobby server的host及port，輸入帳號密碼，註冊並登入
-2. 點擊 Create Game，上傳遊戲並填寫遊戲資訊
-3. 選擇遊戲，點擊 Upload Version可更新版本
-4. 點擊 Publish 發布遊戲
 
-### 3. Player
-```powershell
+Connect to the **Developer Server** on port **23001**, register or sign in, and use **Create Game**, **Upload Version**, and **Publish** to manage releases.
+
+Start the player interface:
+
+```bash
 python -m player_client.gui
 ```
-1. 輸入lobby server的host及port，輸入帳號密碼，註冊並登入
-2. Store 分頁：選擇遊戲，點擊 Download
-3. Rooms 分頁：點擊 Create Room，選擇遊戲;或加入其他房間
-4. 房主點擊 Start Game 啟動遊戲
 
-## 遊戲模板
+Connect to the **Lobby Server** on port **23002**, register or sign in, download a game from **Store**, and create or join a room under **Rooms**. The room host starts the game.
 
-| 模板 | 類型 | 人數 | 說明 |
-|------|------|------|------|
-| connect4_cli | CLI | 2 | 連四棋，輸入 1-7 放置棋子 |
-| tetris_gui | GUI | 2 | 俄羅斯方塊，方向鍵控制 |
-| rps_gui | GUI | 2-8 | 猜拳，點擊選擇石頭/布/剪刀 |
+For deployment across machines, configure the servers' bind addresses, the Developer/Lobby servers' `--db-host` and `--db-port`, and the Lobby Server's `--public-host` to match your network.
 
+## Game Templates
 
-## 技術細節
+| Template | Interface | Players |
+|---|---|---|
+| `connect4_cli` | Terminal | 2 |
+| `tetris_gui` | GUI | 2 |
+| `rps_gui` | GUI | 2–8 |
 
-- 網路協定: Length-Prefixed JSON (4 bytes header + UTF-8 JSON)
-- 連接埠: DB 23000 / Developer 23001 / Lobby 23002
-- 資料庫: SQLite3 (store.sqlite3)
+## Message Framing
+
+```text
+[4-byte unsigned length, big-endian][UTF-8 JSON body]
+```
+
+TCP is a byte stream: a single receive operation may return only part of a message. The receive loop reads the complete header and declared body to reconstruct message boundaries. The shared protocol module limits each frame to 4 MiB.
+
+## Technologies
+
+Python, TCP sockets, threading, SQLite, Tkinter, and JSON.
